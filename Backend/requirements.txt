@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+sqlalchemy
+apscheduler
+yfinance
+groq
+resend
+clerk-backend-api
+requests
+python-dotenv
