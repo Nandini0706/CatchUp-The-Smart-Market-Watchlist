@@ -107,6 +107,10 @@ app.add_middleware(
 class WatchlistCreate(BaseModel):
     ticker: str
 
+class ChatRequest(BaseModel):
+    ticker: str
+    message: str
+
 def get_current_user(request: Request):
     """
     Dependency to extract the user ID from the Clerk JWT.
@@ -273,3 +277,16 @@ def delete_from_watchlist(ticker: str, db: Session = Depends(get_db), user_id: s
     db.commit()
     
     return {"message": f"Successfully removed {ticker_upper}"}
+
+@app.post("/api/chat")
+def stock_chat(req: ChatRequest, user_id: str = Depends(get_current_user)):
+    """Handles deep-dive questions about a specific stock."""
+    ticker_upper = req.ticker.upper()
+    
+    # 1. Fetch the latest news to ground the AI (The "Retrieval" in RAG)
+    news = services.get_recent_news(ticker_upper)
+    
+    # 2. Generate the response
+    reply = services.ask_ai_about_stock(ticker_upper, req.message, news)
+    
+    return {"reply": reply}

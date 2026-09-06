@@ -206,3 +206,38 @@ def send_alert_email(ticker: str, current_price: float, percent_change: float, a
         print(f"Email sent successfully for {ticker} to {to_email}!")
     except Exception as e:
         print(f"Failed to send email: {e}")
+
+def ask_ai_about_stock(ticker: str, user_message: str, news_context: str) -> str:
+    """Answers user questions about a stock using recent news as context."""
+    if not os.getenv("GROQ_API_KEY"):
+        return "AI is disabled. Please configure your API key."
+
+    # This is the RAG (Retrieval-Augmented Generation) prompt!
+    system_prompt = f"""
+    You are an elite financial AI assistant built into a Smart Market Watchlist.
+    You are currently answering a question about the stock: {ticker}.
+    
+    Here is the most recent news for {ticker} to use as context:
+    {news_context}
+    
+    Instructions:
+    1. Answer the user's question concisely and professionally.
+    2. Base your answer on the provided news context if relevant.
+    3. If the answer is not in the news, use your general knowledge but mention that there are no immediate news catalysts today.
+    4. Keep your answer under 3 sentences so it's easy to read in a chat window.
+    """
+
+    try:
+        response = client.chat.completions.create(
+            model="openai/gpt-oss-20b", 
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ],
+            max_tokens=150,
+            temperature=0.5 # Slightly higher temperature for conversational flow
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"AI Chat Error: {e}")
+        return "I'm having trouble connecting to the market data right now."

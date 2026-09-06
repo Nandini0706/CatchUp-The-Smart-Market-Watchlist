@@ -1,9 +1,10 @@
 import { SignedIn, SignedOut, SignIn, UserButton, useAuth } from "@clerk/clerk-react";
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import {
-  TrendingUp, TrendingDown, Sparkles, Activity,
-  Trash2, RefreshCw, Plus, BarChart2, Moon, Sun
+import { 
+  TrendingUp, TrendingDown, Sparkles, Activity, 
+  Trash2, RefreshCw, Plus, BarChart2, Moon, Sun, 
+  MessageSquare, X, Send // <--- ADD THESE THREE
 } from 'lucide-react';
 
 const API_BASE = 'http://localhost:8000/api';
@@ -22,6 +23,11 @@ function App() {
   // --- NEW: Theme State ---
   // Default to true (dark mode) for the cool fintech vibe
   const [isDark, setIsDark] = useState(true);
+
+  const [activeChat, setActiveChat] = useState(null); // stores the ticker (e.g., "AAPL")
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
 
   // Sync the theme state to the HTML document root
   useEffect(() => {
@@ -118,6 +124,44 @@ function App() {
   };
 
   const formatPrice = (price) => price ? `$${price.toFixed(2)}` : 'N/A';
+
+  const openChat = (ticker) => {
+    setActiveChat(ticker);
+    setChatMessages([
+      { role: "assistant", content: `Hi! I'm analyzing the latest data for ${ticker}. What would you like to know?` }
+    ]);
+  };
+
+  const closeChat = () => {
+    setActiveChat(null);
+    setChatMessages([]);
+  };
+
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!chatInput.trim()) return;
+
+    const userMsg = chatInput;
+    // Add user message to UI immediately
+    setChatMessages(prev => [...prev, { role: "user", content: userMsg }]);
+    setChatInput("");
+    setChatLoading(true);
+
+    try {
+      const token = await getToken();
+      const response = await axios.post(`${API_BASE}/chat`, 
+        { ticker: activeChat, message: userMsg },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      // Add AI response to UI
+      setChatMessages(prev => [...prev, { role: "assistant", content: response.data.reply }]);
+    } catch (err) {
+      setChatMessages(prev => [...prev, { role: "assistant", content: "Sorry, I encountered an error connecting to the server." }]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen transition-colors duration-300 bg-[#F8FAFC] dark:bg-slate-950 text-slate-800 dark:text-slate-200 font-sans selection:bg-indigo-100 dark:selection:bg-cyan-900 selection:text-indigo-900 dark:selection:text-cyan-100">
@@ -261,6 +305,14 @@ function App() {
                           <p className="text-slate-700 dark:text-slate-300 leading-relaxed text-[15px] font-medium">
                             {item.ai_context || "Analyzing market sentiment..."}
                           </p>
+
+                          <button 
+                            onClick={() => openChat(item.ticker)}
+                            className="mt-4 flex items-center gap-2 text-sm font-bold text-indigo-600 dark:text-cyan-400 hover:text-indigo-800 dark:hover:text-cyan-300 transition-colors"
+                          >
+                            <MessageSquare className="w-4 h-4" />
+                            Ask AI for a Deep Dive
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -303,6 +355,70 @@ function App() {
           )}
         </div>
       </SignedIn>
+
+      {/* --- NEW: Slide-out Chat Drawer --- */}
+      {activeChat && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex justify-end transition-opacity">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 h-full shadow-2xl flex flex-col border-l border-slate-200 dark:border-slate-800 animate-slide-in">
+            
+            {/* Chat Header */}
+            <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-900/50">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-indigo-600 dark:text-cyan-400" />
+                <h3 className="font-bold text-lg text-slate-900 dark:text-white">{activeChat} Copilot</h3>
+              </div>
+              <button onClick={closeChat} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Chat Messages */}
+            <div className="flex-grow overflow-y-auto p-5 space-y-4">
+              {chatMessages.map((msg, idx) => (
+                <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[85%] rounded-2xl p-4 text-[15px] ${
+                    msg.role === 'user' 
+                      ? 'bg-indigo-600 dark:bg-cyan-600 text-white rounded-br-none' 
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-bl-none border border-slate-200 dark:border-slate-700'
+                  }`}>
+                    {msg.content}
+                  </div>
+                </div>
+              ))}
+              {chatLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-slate-100 dark:bg-slate-800 rounded-2xl rounded-bl-none p-4 flex gap-1 items-center border border-slate-200 dark:border-slate-700">
+                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
+                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Chat Input */}
+            <form onSubmit={handleSendMessage} className="p-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+              <div className="relative flex items-center">
+                <input 
+                  type="text" 
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder="Ask about earnings, leadership, etc..." 
+                  className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full pl-5 pr-12 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-cyan-500 text-slate-900 dark:text-white placeholder-slate-500"
+                />
+                <button 
+                  type="submit"
+                  disabled={chatLoading || !chatInput.trim()}
+                  className="absolute right-2 p-2 bg-indigo-600 dark:bg-cyan-600 text-white rounded-full hover:bg-indigo-700 dark:hover:bg-cyan-500 disabled:opacity-50 transition"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
+            </form>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }
